@@ -20,6 +20,7 @@ import com.hypixel.hytale.protocol.BlockMaterial;
 import com.hypixel.hytale.protocol.InteractionState;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.RotationTuple;
 import com.hypixel.hytale.server.core.asset.type.model.config.Model;
 import com.hypixel.hytale.server.core.asset.type.model.config.ModelAsset;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -31,8 +32,12 @@ import com.hypixel.hytale.server.core.modules.entity.component.PersistentModel;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.SetBlockSettings;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.accessor.SectionReader;
+import com.hypixel.hytale.server.core.universe.world.chunk.BlockOperations;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.util.FillerBlockUtil;
 
 public class StoneWallSpell {
     public static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
@@ -40,10 +45,14 @@ public class StoneWallSpell {
     private static List<Vector2i> SHAPE_FLAT;
     private static List<Vector2i> SHAPE_CORNER;
 
+    public static final String INVISIBLE_BLOCK = "InvisibleBlock";
+
     public static InteractionState CastSpell(CommandBuffer<EntityStore> commandBuffer,
             Vector3d origin, Rotation3f rotation, int durationMs) {
         // Get Store and World
         World world = commandBuffer.getExternalData().getWorld();
+        var chunkStore = world.getChunkStore();
+        var blocks = new SectionReader(chunkStore);
 
         // Create Entity Holder to make a new Entity
         Holder<EntityStore> holder = EntityStore.REGISTRY.newHolder();
@@ -62,14 +71,13 @@ public class StoneWallSpell {
                 (int) Math.floor(origin.y),
                 (int) Math.floor(origin.z));
 
-        BlockType wallSpawnBlockPos = world.getBlockType(centerOfWall);
-        ; // Type of block where the wall will be spawned
+        BlockMaterial wallSpawnMaterial = materialAt(blocks, centerOfWall); // Material of block where the wall will be spawned
         int decale = 1;
         int maxChecks = 5;
         // Check for empty space to spawn wall, if not found, move further away in
         // facing
         BlockMaterial empty = BlockMaterial.Empty;
-        if (wallSpawnBlockPos.getMaterial().equals(empty)) {
+        if (wallSpawnMaterial.equals(empty)) {
             // If empty, check under for solid ground
             LOGGER.atInfo().log("Spawned wall in empty space");
             while (maxChecks > 0) {
@@ -77,8 +85,7 @@ public class StoneWallSpell {
                         centerOfWall.x,
                         centerOfWall.y - decale,
                         centerOfWall.z);
-                BlockType belowBlock = world.getBlockType(belowPos);
-                if (!belowBlock.getMaterial().equals(empty)) {
+                if (!materialAt(blocks, belowPos).equals(empty)) {
                     // Found solid ground below
                     wallTransform.getPosition().y -= decale - 1; // Move wall down to be on solid ground
                     centerOfWall.y -= decale - 1;
@@ -95,8 +102,7 @@ public class StoneWallSpell {
                         centerOfWall.x,
                         centerOfWall.y + decale,
                         centerOfWall.z);
-                BlockType aboveBlock = world.getBlockType(abovePos);
-                if (aboveBlock.getMaterial().equals(empty)) {
+                if (materialAt(blocks, abovePos).equals(empty)) {
                     // Found empty space above
                     wallTransform.getPosition().y += decale; // Move wall up to be in empty space
                     centerOfWall.y += decale;
@@ -106,8 +112,8 @@ public class StoneWallSpell {
                 maxChecks -= 1;
             }
         }
-        if (!(world.getBlockType(centerOfWall).getMaterial().equals(BlockMaterial.Empty)
-                && world.getBlockType(new Vector3i(centerOfWall.x, centerOfWall.y - 1, centerOfWall.z)).getMaterial()
+        if (!(materialAt(blocks, centerOfWall).equals(BlockMaterial.Empty)
+                && materialAt(blocks, new Vector3i(centerOfWall.x, centerOfWall.y - 1, centerOfWall.z))
                         .equals(BlockMaterial.Solid))) {
             // Could not find suitable space to spawn wall
             LOGGER.atInfo().log("Failed to find suitable space to spawn wall");
@@ -130,21 +136,30 @@ public class StoneWallSpell {
         CreateShape();
         List<Vector2i> Wallshape = getShape(rotation.y());
         List<Vector3i> invisibleBlockPositions = new ArrayList<>();
+        var invisibleBlockId = BlockType.getAssetMap().getIndex(INVISIBLE_BLOCK);
+        var invisibleBlock = BlockType.getAssetMap().getAsset(invisibleBlockId);
+        if (invisibleBlock == null) {
+            LOGGER.atWarning().log("Missing block type " + INVISIBLE_BLOCK);
+            return InteractionState.Failed;
+        }
         for (Vector2i v : Wallshape) { // For each position in the wall shape
             for (int y_add = -2; y_add < 3; y_add++) { // Wall height of 3 blocks (+2 under making it 5 blocks)
                 Vector3i blockPos = new Vector3i(
                         centerOfWall.x + v.x,
                         centerOfWall.y + y_add,
                         centerOfWall.z + v.y);
-                if (world.getBlockType(blockPos).getMaterial() == BlockMaterial.Empty) { // Only set block if space is
-                                                                                         // empty, otherwise leave
-                                                                                         // existing block
+                var sectionRef = blocks.sectionAt(blockPos.x, blockPos.y, blockPos.z);
+                if (sectionRef != null && materialAt(blocks, blockPos) == BlockMaterial.Empty) { // Only set block if space is
+                                                                                                 // empty, otherwise leave
+                                                                                                 // existing block
                     invisibleBlockPositions.add(blockPos); // Save position to remove later
-                    world.setBlock(
+                    BlockOperations.setBlock(chunkStore, sectionRef,
                             blockPos.x,
                             blockPos.y,
                             blockPos.z,
-                            "InvisibleBlock"); // Set block to invisible block for collision only
+                            invisibleBlockId, invisibleBlock,
+                            RotationTuple.NONE_INDEX, FillerBlockUtil.NO_FILLER,
+                            SetBlockSettings.NONE); // Set block to invisible block for collision only
                 }
             }
         }
@@ -162,6 +177,11 @@ public class StoneWallSpell {
 
         return InteractionState.Finished;
 
+    }
+
+    private static BlockMaterial materialAt(SectionReader blocks, Vector3i pos) {
+        return BlockType.getAssetMap().getAssetOrDefault(blocks.getBlock(pos.x, pos.y, pos.z), BlockType.EMPTY)
+                .getMaterial();
     }
 
     // Making Shapes for Collision Detection

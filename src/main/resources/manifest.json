@@ -11,7 +11,7 @@
             "Name": "Rirpod"
         }
     ],
-    "ServerVersion": ">=0.6.0",
+    "ServerVersion": ">=0.6.3",
     "Dependencies": {
         
     },
