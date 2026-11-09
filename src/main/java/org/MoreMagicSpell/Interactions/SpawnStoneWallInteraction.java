@@ -31,7 +31,7 @@ public class SpawnStoneWallInteraction extends SimpleInstantInteraction {
             @NonNullDecl InteractionContext interactionContext, @NonNullDecl CooldownHandler cooldownHandler) {
 
         // Get CommandBuffer
-        CommandBuffer<EntityStore> commandBuffer = interactionContext.getCommandBuffer();
+        var commandBuffer = interactionContext.getCommandBuffer();
 
         // Verfication Checks for CommandBuffer, Player, and ItemStack
         if (commandBuffer == null) {
@@ -40,17 +40,20 @@ public class SpawnStoneWallInteraction extends SimpleInstantInteraction {
             return;
         }
 
-        var target = interactionContext.getTargetEntity();
+        var target = interactionContext.getOwningEntity();
 
-        HeadRotation headRotation = commandBuffer.getComponent(target, HeadRotation.getComponentType());
-        float direction = headRotation.getRotation().y(); // facing direction of player
+        if (target == null || !target.isValid()) return;
+
+        var headRotation = commandBuffer.getComponent(target, HeadRotation.getComponentType());
+        if (headRotation == null) return;
+        var direction = headRotation.getRotation().y(); // facing direction of player
 
         // Set up the wall position
-        double offsetX = -Math.sin(direction) * WALL_SPAWN_DISTANCE;
-        double offsetZ = -Math.cos(direction) * WALL_SPAWN_DISTANCE;
+        var offsetX = -Math.sin(direction) * WALL_SPAWN_DISTANCE;
+        var offsetZ = -Math.cos(direction) * WALL_SPAWN_DISTANCE;
 
-        TransformComponent playerTransform = commandBuffer.getComponent(target, TransformComponent.getComponentType());
-        Vector3d wallPosition = new Vector3d(playerTransform.getPosition());
+        var playerTransform = commandBuffer.getComponent(target, TransformComponent.getComponentType());
+        var wallPosition = new Vector3d(playerTransform.getPosition());
         wallPosition.add(
                 new Vector3d(
                         offsetX,

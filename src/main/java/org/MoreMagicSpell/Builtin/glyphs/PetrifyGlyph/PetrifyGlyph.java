@@ -5,11 +5,11 @@ import org.MoreMagicSpell.Spells.PetrifySpell;
 import com.riprod.hexcode.api.execution.HexExecuter;
 import com.riprod.hexcode.core.common.execution.context.HexContext;
 import com.riprod.hexcode.core.common.glyphs.component.Glyph;
-import com.riprod.hexcode.core.common.glyphs.component.GlyphHandler;
+import com.riprod.hexcode.core.common.glyphs.registry.GlyphAsset;
 import com.riprod.hexcode.core.common.glyphs.variables.EntityVar;
 
-public class PetrifyGlyph implements GlyphHandler {
-    public static final String ID = "Petrify";
+public class PetrifyGlyph extends GlyphAsset {
+    public static final String TYPE = "Petrify";
 
     @Override
     public void execute(Glyph glyph, HexContext hexContext) {
@@ -18,7 +18,7 @@ public class PetrifyGlyph implements GlyphHandler {
             return;
         }
         var durationVar = glyph.readSlot(PetrifySlots.DURATION, hexContext);
-        var duration = durationVar.toScalar();
+        var duration = durationVar.scalar();
         if (duration == null) {
             duration = 5d;
         }
@@ -29,10 +29,4 @@ public class PetrifyGlyph implements GlyphHandler {
 
         HexExecuter.continueFromSlot(glyph, Glyph.NEXT_SLOT, hexContext);
     }
-
-    @Override
-    public String getId() {
-        return ID;
-    }
-
 }
