@@ -15,9 +15,9 @@ java {
 
 
 dependencies {
-    implementation 'curse.maven:hexcode-1448311:9146849'
+    // implementation 'curse.maven:hexcode-1448311:9146849'
     // compileOnly 'curse.maven:hexcode-1448311:8748618'
-    // implementation files('lib/Hexcode-0.11.0.jar')
+    vineImplementation files('lib/Hexcode-0.12.0.jar')
 }
 
 
